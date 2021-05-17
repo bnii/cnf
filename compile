@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+
+set -eo pipefail
+
+if [ -z "$GRAALVM_HOME" ]; then
+    echo "Please set GRAALVM_HOME"
+    exit 1
+fi
+
+"$GRAALVM_HOME/bin/gu" install native-image || true
+
+lein  do clean, uberjar
+
+$GRAALVM_HOME/bin/native-image \
+  -jar target/cnf-0.1.0-SNAPSHOT-standalone.jar \
+  -H:Name=cnf \
+  -H:+ReportExceptionStackTraces \
+  -J-Dclojure.spec.skip-macros=true \
+  -J-Dclojure.compiler.direct-linking=true \
+  -H:+ReportExceptionStackTraces \
+    -H:EnableURLProtocols=https \
+  -H:ReflectionConfigurationFiles=reflection.json \
+  --initialize-at-build-time  \
+  --verbose \
+  --no-fallback
+#lein clean
