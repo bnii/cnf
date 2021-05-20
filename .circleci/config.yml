@@ -1,46 +1,62 @@
-# Clojure CircleCI 2.0 configuration file
-#
-# Check https://circleci.com/docs/2.0/language-clojure/ for more details
-#
 version: 2.1
 
 jobs:
   build:
     docker:
-      # specify the version you desire here
       - image: circleci/clojure:lein-2.9.5
-
-      # Specify service dependencies here if necessary
-      # CircleCI maintains a library of pre-built images
-      # documented at https://circleci.com/docs/2.0/circleci-images/
-      # - image: circleci/postgres:9.4
-
     working_directory: ~/repo
 
     environment:
       LEIN_ROOT: "true"
-      # Customize the JVM maximum heap limit
       JVM_OPTS: -Xmx3200m
+      GRAALVM_HOME: /home/circleci/graalvm-ce-java8-21.1.0
 
     steps:
       - checkout
 
-      # Download and cache dependencies
       - restore_cache:
           keys:
-            - v1-dependencies-{{ checksum "project.clj" }}
-            # fallback to using the latest cache if no exact match is found
+            - v1-dependencies-{{ checksum "project.clj" }}-{{ checksum ".circleci/config.yml" }}
             - v1-dependencies-
-
-      - run: lein deps
-
+      - run:
+          name: Install Clojure
+          command: |
+            wget https://download.clojure.org/install/linux-install-1.10.1.447.sh
+            chmod +x linux-install-1.10.1.447.sh
+            sudo ./linux-install-1.10.1.447.sh
+      - run:
+          name: Install native dev tools
+          command: |
+            sudo apt-get update
+            sudo apt-get -y install build-essential zlib1g-dev
+      - run:
+          name: Download GraalVM
+          command: |
+            cd ~
+            if ! [ -d graalvm-ce-java8-21.1.0 ]; then
+              curl -O -sL  https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-21.1.0/graalvm-ce-java8-linux-amd64-21.1.0.tar.gz
+              tar xzf graalvm-ce-java8-linux-amd64-21.1.0.tar.gz
+            fi
+      - run:
+          name: Install native-image
+          command: |
+            "$GRAALVM_HOME/bin/gu" install native-image || true
+      - run:
+          name: Build binary
+          command: |
+            cd ~/repo
+            pwd
+            ls -latrF
+            ./compile
+          no_output_timeout: 30m
       - save_cache:
           paths:
             - ~/.m2
-          key: v1-dependencies-{{ checksum "project.clj" }}
-
-      # run tests!
-      - run: lein test
+            - ~/graalvm-ce-java8-21.1.0
+          key: v1-dependencies-{{ checksum "project.clj" }}--{{ checksum ".circleci/config.yml" }}
+      - store_artifacts:
+          path: ~/repo/cnf
+          destination: cnf
 
 workflows:
   build:
